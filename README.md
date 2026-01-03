@@ -52,17 +52,32 @@ GEMINI_API_KEY=your_gemini_api_key_here
 # Inspect a process by PID
 ./inspektor 1234
 
+# Inspect a process by port number
+./inspektor --port 8080
+# or
+./inspektor -p 8080
+
 # With verbose output
 ./inspektor -v 1234
 
 # JSON output format
 ./inspektor -j 1234
 
+# Combine port and JSON output
+./inspektor -p 3000 -j
+
 # Get help
 ./inspektor --help
 ```
 
+**Note**: Inspecting by port may require sudo privileges to access network connection information.
+
 ## Example Output
+
+### Inspect by PID
+```bash
+./inspektor 1234
+```
 
 ### Rich Terminal Display
 ```
@@ -89,6 +104,37 @@ Child Processes: 4
            CPU: 8 cores, 15.3%
         Memory: 8.2 GB / 16.0 GB (51.2%)
      CPU Model: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
+
+✓ All systems healthy
+```
+
+### Inspect by Port
+```bash
+sudo ./inspektor --port 8080
+```
+
+Output:
+```
+Found process 32862 listening on port 8080
+
+INSPEKTOR - Process 32862 (docker-proxy)
+
+────────────────────────────────────────────────────────────
+
+ PROCESS 
+        Status: Sleeping
+       Command: /usr/bin/docker-proxy -proto tcp -host-ip 0.0.0.0 -host-port 8080...
+    Executable: /usr/bin/docker-proxy
+   Working Dir: /
+       Started: Jan 03, 23:02:51
+
+ RESOURCES 
+     CPU Usage: 0.0%
+        Memory: 4.8 MB (0.0%)
+Virtual Memory: 1.7 GB
+    Open Files: 6
+   Connections: 1
+Child Processes: 0
 
 ✓ All systems healthy
 ```
