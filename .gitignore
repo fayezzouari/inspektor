@@ -26,8 +26,5 @@ inspektor
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-
 # Go workspace file
 go.work
