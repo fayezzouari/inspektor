@@ -9,6 +9,7 @@ import (
 	"inspektor/internal/display"
 	"inspektor/internal/models"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/net"
@@ -34,6 +35,18 @@ func (i *Inspector) InspectWithOptions(pid int32, jsonOutput, verbose bool) erro
 			fmt.Printf("Warning: Failed to close AI client: %v\n", err)
 		}
 	}()
+
+	// Show banner and start processing animation (skip for JSON output)
+	if !jsonOutput {
+		display.ShowBanner("")
+		done := make(chan bool)
+		go display.ShowProcessingAnimation("Analyzing process and system metrics...", done)
+		defer func() {
+			done <- true
+			close(done)
+			time.Sleep(100 * time.Millisecond) // Give time to clear the animation
+		}()
+	}
 
 	// Get process information
 	proc, err := process.NewProcess(pid)
@@ -78,13 +91,39 @@ func (i *Inspector) Inspect(pid int32) error {
 }
 
 func (i *Inspector) InspectByPort(port int, jsonOutput, verbose bool) error {
-	// Find the PID listening on the specified port
-	pid, err := i.findProcessByPort(port)
-	if err != nil {
-		return fmt.Errorf("failed to find process on port %d: %w", port, err)
+	// Show banner for port lookup (skip for JSON output)
+	if !jsonOutput {
+		display.ShowBanner("")
+		done := make(chan bool)
+		go display.ShowProcessingAnimation(fmt.Sprintf("Finding process on port %d...", port), done)
+
+		// Find the PID listening on the specified port
+		pid, err := i.findProcessByPort(port)
+
+		done <- true
+		close(done)
+		time.Sleep(100 * time.Millisecond)
+
+		if err != nil {
+			return fmt.Errorf("failed to find process on port %d: %w", port, err)
+		}
+
+		fmt.Printf("\n%s\n\n",
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#22C55E")).
+				Bold(true).
+				Render(fmt.Sprintf("✓ Found process %d listening on port %d", pid, port)))
+	} else {
+		// Silent lookup for JSON mode
+		pid, err := i.findProcessByPort(port)
+		if err != nil {
+			return fmt.Errorf("failed to find process on port %d: %w", port, err)
+		}
+		return i.InspectWithOptions(pid, jsonOutput, verbose)
 	}
 
-	fmt.Printf("Found process %d listening on port %d\n\n", pid, port)
+	// Continue with normal inspection (which will show its own banner)
+	pid, _ := i.findProcessByPort(port)
 	return i.InspectWithOptions(pid, jsonOutput, verbose)
 }
 
