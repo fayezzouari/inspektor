@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"inspektor/internal/models"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 type Formatter struct{}
@@ -15,32 +17,32 @@ func NewFormatter() *Formatter {
 
 func (f *Formatter) FormatReport(data *models.InspectionData) string {
 	var output strings.Builder
-	
+
 	// Title with process name
 	title := fmt.Sprintf("INSPEKTOR - Process %d (%s)", data.Process.PID, data.Process.Name)
 	output.WriteString(titleStyle.Render(title))
 	output.WriteString("\n")
 	output.WriteString(separatorStyle.Render(strings.Repeat("─", 60)))
 	output.WriteString("\n")
-	
+
 	// Process Overview - most important info first
 	output.WriteString(f.formatProcessOverview(data.Process))
-	
+
 	// Resource Usage - key metrics
 	output.WriteString(f.formatResourceMetrics(data.Process))
-	
+
 	// System Context
 	output.WriteString(f.formatSystemContext(data.System))
-	
+
 	return output.String()
 }
 
 func (f *Formatter) formatProcessOverview(proc *models.ProcessInfo) string {
 	var content strings.Builder
-	
+
 	content.WriteString(sectionStyle.Render(" PROCESS "))
 	content.WriteString("\n")
-	
+
 	// Most important info in a clean table format
 	items := []struct {
 		key   string
@@ -52,7 +54,7 @@ func (f *Formatter) formatProcessOverview(proc *models.ProcessInfo) string {
 		{"Working Dir", proc.WorkingDir},
 		{"Started", proc.CreateTime.Format("Jan 02, 15:04:05")},
 	}
-	
+
 	for _, item := range items {
 		if item.value != "" {
 			content.WriteString(contentStyle.Render(
@@ -60,16 +62,16 @@ func (f *Formatter) formatProcessOverview(proc *models.ProcessInfo) string {
 			content.WriteString("\n")
 		}
 	}
-	
+
 	return content.String()
 }
 
 func (f *Formatter) formatResourceMetrics(proc *models.ProcessInfo) string {
 	var content strings.Builder
-	
+
 	content.WriteString(sectionStyle.Render(" RESOURCES "))
 	content.WriteString("\n")
-	
+
 	// Key metrics with visual indicators
 	items := []struct {
 		key   string
@@ -82,22 +84,22 @@ func (f *Formatter) formatResourceMetrics(proc *models.ProcessInfo) string {
 		{"Connections", f.formatCount(proc.Connections, 50)},
 		{"Child Processes", f.formatCount(proc.Children, 10)},
 	}
-	
+
 	for _, item := range items {
 		content.WriteString(contentStyle.Render(
 			keyStyle.Render(item.key+":") + " " + item.value))
 		content.WriteString("\n")
 	}
-	
+
 	return content.String()
 }
 
 func (f *Formatter) formatSystemContext(sys *models.SystemInfo) string {
 	var content strings.Builder
-	
+
 	content.WriteString(sectionStyle.Render(" SYSTEM "))
 	content.WriteString("\n")
-	
+
 	items := []struct {
 		key   string
 		value string
@@ -106,13 +108,13 @@ func (f *Formatter) formatSystemContext(sys *models.SystemInfo) string {
 		{"Memory", f.formatSystemMemory(sys.MemoryUsed, sys.MemoryTotal, sys.MemoryPercent)},
 		{"CPU Model", f.truncateString(sys.CPUModel, 50)},
 	}
-	
+
 	for _, item := range items {
 		content.WriteString(contentStyle.Render(
 			keyStyle.Render(item.key+":") + " " + item.value))
 		content.WriteString("\n")
 	}
-	
+
 	return content.String()
 }
 
@@ -120,19 +122,62 @@ func (f *Formatter) FormatWarnings(warnings []string) string {
 	if len(warnings) == 0 {
 		return successMessageStyle.Render("✓ All systems healthy") + "\n\n"
 	}
-	
+
 	var output strings.Builder
-	
-	output.WriteString(warningHeaderStyle.Render(" WARNINGS "))
-	output.WriteString("\n")
-	
-	for i, warning := range warnings {
-		prefix := fmt.Sprintf("  %d. ", i+1)
-		output.WriteString(warningItemStyle.Render(prefix + warning))
+
+	// Separate warnings and recommendations
+	var actualWarnings []string
+	var recommendations []string
+
+	for _, item := range warnings {
+		if strings.HasPrefix(item, "⚠") {
+			actualWarnings = append(actualWarnings, item)
+		} else if strings.HasPrefix(item, "→") {
+			recommendations = append(recommendations, item)
+		} else {
+			// Fallback for items without prefix
+			actualWarnings = append(actualWarnings, item)
+		}
+	}
+
+	// Display warnings first
+	if len(actualWarnings) > 0 {
+		output.WriteString(warningHeaderStyle.Render(" WARNINGS "))
+		output.WriteString("\n")
+
+		for i, warning := range actualWarnings {
+			prefix := fmt.Sprintf("  %d. ", i+1)
+			output.WriteString(warningItemStyle.Render(prefix + warning))
+			output.WriteString("\n")
+		}
 		output.WriteString("\n")
 	}
-	output.WriteString("\n")
-	
+
+	// Display recommendations
+	if len(recommendations) > 0 {
+		recommendHeaderStyle := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#3B82F6")).
+			Background(lipgloss.Color("#1E3A8A")).
+			Padding(0, 2).
+			MarginTop(1).
+			MarginBottom(1)
+
+		recommendItemStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#60A5FA")).
+			PaddingLeft(2)
+
+		output.WriteString(recommendHeaderStyle.Render(" RECOMMENDATIONS "))
+		output.WriteString("\n")
+
+		for i, rec := range recommendations {
+			prefix := fmt.Sprintf("  %d. ", i+1)
+			output.WriteString(recommendItemStyle.Render(prefix + rec))
+			output.WriteString("\n")
+		}
+		output.WriteString("\n")
+	}
+
 	return output.String()
 }
 
