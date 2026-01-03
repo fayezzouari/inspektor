@@ -11,6 +11,7 @@ import (
 
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/mem"
+	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
 )
 
@@ -74,6 +75,49 @@ func (i *Inspector) InspectWithOptions(pid int32, jsonOutput, verbose bool) erro
 
 func (i *Inspector) Inspect(pid int32) error {
 	return i.InspectWithOptions(pid, false, false)
+}
+
+func (i *Inspector) InspectByPort(port int, jsonOutput, verbose bool) error {
+	// Find the PID listening on the specified port
+	pid, err := i.findProcessByPort(port)
+	if err != nil {
+		return fmt.Errorf("failed to find process on port %d: %w", port, err)
+	}
+
+	fmt.Printf("Found process %d listening on port %d\n\n", pid, port)
+	return i.InspectWithOptions(pid, jsonOutput, verbose)
+}
+
+func (i *Inspector) findProcessByPort(port int) (int32, error) {
+	// Get all network connections
+	connections, err := net.Connections("all")
+	if err != nil {
+		return 0, fmt.Errorf("failed to get network connections: %w", err)
+	}
+
+	// Find connections matching the port
+	var candidatePIDs []int32
+	for _, conn := range connections {
+		if conn.Laddr.Port == uint32(port) && conn.Status == "LISTEN" {
+			candidatePIDs = append(candidatePIDs, conn.Pid)
+		}
+	}
+
+	if len(candidatePIDs) == 0 {
+		return 0, fmt.Errorf("no process found listening on port %d", port)
+	}
+
+	// Return the first valid PID
+	for _, pid := range candidatePIDs {
+		if pid > 0 {
+			// Verify the process exists
+			if _, err := process.NewProcess(pid); err == nil {
+				return pid, nil
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("no valid process found listening on port %d", port)
 }
 
 func (i *Inspector) outputJSON(data *models.InspectionData, warnings []string) error {
